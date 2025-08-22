@@ -776,6 +776,56 @@ export type Database = {
           },
         ]
       }
+      envois_groupes: {
+        Row: {
+          commercial: string | null
+          created_at: string | null
+          filtre_utilise: Json | null
+          id: number
+          nom_campagne: string
+          nombre_destinataires: number | null
+          nombre_echecs: number | null
+          nombre_envoyes: number | null
+          statut_cible: string | null
+          template_id: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          commercial?: string | null
+          created_at?: string | null
+          filtre_utilise?: Json | null
+          id?: number
+          nom_campagne: string
+          nombre_destinataires?: number | null
+          nombre_echecs?: number | null
+          nombre_envoyes?: number | null
+          statut_cible?: string | null
+          template_id?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          commercial?: string | null
+          created_at?: string | null
+          filtre_utilise?: Json | null
+          id?: number
+          nom_campagne?: string
+          nombre_destinataires?: number | null
+          nombre_echecs?: number | null
+          nombre_envoyes?: number | null
+          statut_cible?: string | null
+          template_id?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envois_groupes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interactions: {
         Row: {
           canal: string | null
@@ -859,6 +909,50 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contact"
             referencedColumns: ["identifiant"]
+          },
+        ]
+      }
+      rdv: {
+        Row: {
+          commercial_id: string | null
+          created_at: string | null
+          date_proposee: string | null
+          id: string
+          lien: string
+          message: string | null
+          projet_id: number | null
+          statut: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          commercial_id?: string | null
+          created_at?: string | null
+          date_proposee?: string | null
+          id?: string
+          lien: string
+          message?: string | null
+          projet_id?: number | null
+          statut?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          commercial_id?: string | null
+          created_at?: string | null
+          date_proposee?: string | null
+          id?: string
+          lien?: string
+          message?: string | null
+          projet_id?: number | null
+          statut?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rdv_projet_id_fkey"
+            columns: ["projet_id"]
+            isOneToOne: false
+            referencedRelation: "projets"
+            referencedColumns: ["projet_id"]
           },
         ]
       }
