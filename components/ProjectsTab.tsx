@@ -150,7 +150,6 @@ export function ProjectsTab() {
     }
   }
 
-  // Filtrage des projets
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
       const matchesSearch = !searchTerm || 
@@ -170,12 +169,10 @@ export function ProjectsTab() {
     })
   }, [projects, searchTerm, statusFilter, commercialFilter])
 
-  // Pagination
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + itemsPerPage)
 
-  // Sélection
   const toggleProjectSelection = (projectId: number) => {
     const newSelection = new Set(selectedProjects)
     if (newSelection.has(projectId)) {
@@ -208,7 +205,6 @@ export function ProjectsTab() {
       }))
   }
 
-  // Personnalisation des variables dans le contenu
   const personalizeContent = (content: string, recipient: any) => {
     return content
       .replace(/{{nom_client}}/g, `${recipient.prenom} ${recipient.nom}`)
@@ -224,7 +220,6 @@ export function ProjectsTab() {
       `)
   }
 
-  // Envoi groupé d'emails via Brevo
   const handleSendGroupEmail = async () => {
     const recipients = getSelectedProjectsWithEmail()
     if (recipients.length === 0) {
@@ -239,107 +234,146 @@ export function ProjectsTab() {
     setIsSendingEmail(true)
     
     try {
-      // Créer une campagne
+      console.log(`🚀 Début envoi groupé vers ${recipients.length} destinataires via Brevo`)
+      
       const { data: campaign, error: campaignError } = await supabase
         .from('envois_groupes')
         .insert({
-          nom_campagne: `Envoi groupé - ${new Date().toLocaleDateString()}`,
+          nom_campagne: `Envoi groupé - ${new Date().toLocaleDateString()} - ${recipients.length} contacts`,
           nombre_destinataires: recipients.length,
           template_id: emailData.templateId ? parseInt(emailData.templateId) : null,
           statut_cible: statusFilter !== 'all' ? statusFilter : null,
-          commercial: commercialFilter !== 'all' ? commercialFilter : null
+          commercial: commercialFilter !== 'all' ? commercialFilter : null,
+          date_creation: new Date().toISOString()
         })
         .select()
         .single()
 
       if (campaignError) throw campaignError
+      console.log(`📋 Campagne créée avec ID: ${campaign.id}`)
 
       let successCount = 0
       let errorCount = 0
       const errors: string[] = []
 
-      // Envoyer les emails un par un via Brevo
-      for (const recipient of recipients) {
-        try {
-          const selectedTemplate = templates.find(t => t.id === parseInt(emailData.templateId))
-          const subject = emailData.useCustomContent ? emailData.subject : selectedTemplate?.sujet || 'Email Premunia'
-          const htmlContent = emailData.useCustomContent ? emailData.content : selectedTemplate?.contenu_html || ''
-          const textContent = selectedTemplate?.contenu_texte || ''
+      const selectedTemplate = templates.find(t => t.id === parseInt(emailData.templateId))
+      const baseSubject = emailData.useCustomContent ? emailData.subject : selectedTemplate?.sujet || 'Email Premunia'
+      const baseHtmlContent = emailData.useCustomContent ? emailData.content : selectedTemplate?.contenu_html || ''
+      const baseTextContent = selectedTemplate?.contenu_texte || ''
 
-          // Personnaliser le contenu
-          const personalizedHtml = personalizeContent(htmlContent, recipient)
-          const personalizedText = personalizeContent(textContent, recipient)
-          const personalizedSubject = personalizeContent(subject, recipient)
+      const BATCH_SIZE = 10
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const batch = recipients.slice(i, i + BATCH_SIZE)
+        
+        const batchPromises = batch.map(async (recipient) => {
+          try {
+            const personalizedSubject = personalizeContent(baseSubject, recipient)
+            const personalizedHtml = personalizeContent(baseHtmlContent, recipient)
+            const personalizedText = personalizeContent(baseTextContent, recipient)
 
-          // Appeler l'edge function d'envoi via Brevo
-          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-email', {
-            body: {
-              to: recipient.email,
-              subject: personalizedSubject,
-              html: personalizedHtml,
-              text: personalizedText,
-              projectId: recipient.projectId,
-              campaignId: campaign.id
+            console.log(`📧 Envoi vers: ${recipient.email}`)
+
+            const response = await fetch(`${supabase.supabaseUrl}/functions/v1/send-email`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabase.supabaseKey}`,
+              },
+              body: JSON.stringify({
+                to: recipient.email,
+                subject: personalizedSubject,
+                html: personalizedHtml,
+                text: personalizedText,
+                config: {
+                  provider: 'brevo',
+                  sender_name: 'CRM Marketing',
+                  sender_email: 'info@premunia.com'
+                }
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text()}`)
             }
-          })
 
-          if (emailError) throw emailError
+            const result = await response.json()
+            
+            if (result.success) {
+              console.log(`✅ Email envoyé à ${recipient.email}: ${result.messageId}`)
+              
+              await supabase.from('envois_email').insert({
+                campagne_id: campaign.id,
+                contact_id: recipient.contactId,
+                projet_id: recipient.projectId,
+                email_destinataire: recipient.email,
+                sujet: personalizedSubject,
+                contenu_html: personalizedHtml,
+                contenu_texte: personalizedText,
+                statut: 'envoye',
+                date_envoi: new Date().toISOString(),
+                message_id: result.messageId
+              })
 
-          console.log(`Email envoyé avec succès à ${recipient.email}:`, emailResult)
-          successCount++
+              return { success: true, email: recipient.email }
+            } else {
+              throw new Error(result.error || 'Erreur inconnue')
+            }
 
-          // Enregistrer l'envoi
-          await supabase.from('envois_email').insert({
-            campagne_id: campaign.id,
-            contact_id: recipient.contactId,
-            projet_id: recipient.projectId,
-            email_destinataire: recipient.email,
-            sujet: personalizedSubject,
-            contenu_html: personalizedHtml,
-            contenu_texte: personalizedText,
-            statut: 'envoye',
-            date_envoi: new Date().toISOString()
-          })
+          } catch (error: any) {
+            console.error(`❌ Erreur envoi vers ${recipient.email}:`, error)
+            
+            await supabase.from('envois_email').insert({
+              campagne_id: campaign.id,
+              contact_id: recipient.contactId,
+              projet_id: recipient.projectId,
+              email_destinataire: recipient.email,
+              sujet: baseSubject,
+              statut: 'echec',
+              erreur_message: error.message,
+              date_creation: new Date().toISOString()
+            })
 
-        } catch (error: any) {
-          console.error(`Erreur envoi email à ${recipient.email}:`, error)
-          errorCount++
-          errors.push(`${recipient.email}: ${error.message}`)
+            return { success: false, email: recipient.email, error: error.message }
+          }
+        })
 
-          // Enregistrer l'échec
-          await supabase.from('envois_email').insert({
-            campagne_id: campaign.id,
-            contact_id: recipient.contactId,
-            projet_id: recipient.projectId,
-            email_destinataire: recipient.email,
-            sujet: emailData.subject,
-            statut: 'echec',
-            erreur_message: error.message
-          })
+        const batchResults = await Promise.all(batchPromises)
+        
+        batchResults.forEach(result => {
+          if (result.success) {
+            successCount++
+          } else {
+            errorCount++
+            errors.push(`${result.email}: ${result.error}`)
+          }
+        })
+
+        if (i + BATCH_SIZE < recipients.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 
-      // Mettre à jour les stats de la campagne
       await supabase
         .from('envois_groupes')
         .update({
           nombre_envoyes: successCount,
-          nombre_echecs: errorCount
+          nombre_echecs: errorCount,
+          date_envoi: new Date().toISOString(),
+          statut: successCount > 0 ? 'termine' : 'echec'
         })
         .eq('id', campaign.id)
 
-      // Notification de résultat
       if (successCount > 0) {
         toast({
-          title: "Emails envoyés",
-          description: `${successCount} emails envoyés avec succès ${errorCount > 0 ? `(${errorCount} échecs)` : ''}`,
+          title: "🎉 Envoi groupé terminé !",
+          description: `${successCount} emails envoyés avec succès via Brevo ${errorCount > 0 ? `(${errorCount} échecs)` : ''}`,
         })
       }
 
       if (errorCount > 0 && successCount === 0) {
         toast({
-          title: "Échec d'envoi",
-          description: `Tous les emails ont échoué. Vérifiez la configuration Brevo.`,
+          title: "❌ Échec complet",
+          description: `Tous les ${errorCount} emails ont échoué. Vérifiez votre configuration Brevo.`,
           variant: "destructive"
         })
       }
@@ -348,10 +382,12 @@ export function ProjectsTab() {
       setSelectedProjects(new Set())
       setEmailData({ templateId: '', subject: '', content: '', useCustomContent: false })
 
+      console.log(`📊 Résultat final: ${successCount} réussis, ${errorCount} échecs`)
+
     } catch (error: any) {
-      console.error('Erreur envoi groupé:', error)
+      console.error('❌ Erreur critique envoi groupé:', error)
       toast({
-        title: "Erreur",
+        title: "Erreur critique",
         description: error.message || "Impossible d'envoyer les emails",
         variant: "destructive"
       })
@@ -360,7 +396,6 @@ export function ProjectsTab() {
     }
   }
 
-  // Créer des RDV pour les projets sélectionnés
   const handleCreateRdv = async () => {
     const selectedProjectsList = paginatedProjects.filter(p => selectedProjects.has(p.projet_id))
     
@@ -377,7 +412,6 @@ export function ProjectsTab() {
 
     try {
       const rdvPromises = selectedProjectsList.map(async (project) => {
-        // Créer le RDV dans la base
         const { data: rdv, error } = await supabase
           .from('rdv')
           .insert({
@@ -392,10 +426,8 @@ export function ProjectsTab() {
 
         if (error) throw error
 
-        // Générer le lien unique
         const lienRdv = `${window.location.origin}/rdv/${rdv.id}`
         
-        // Mettre à jour avec le lien
         await supabase
           .from('rdv')
           .update({ lien: lienRdv })
@@ -427,7 +459,6 @@ export function ProjectsTab() {
     }
   }
 
-  // Sélection du template
   const handleTemplateSelect = (templateId: string) => {
     const template = templates.find(t => t.id === parseInt(templateId))
     if (template) {
@@ -466,7 +497,6 @@ export function ProjectsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Gestion des Projets</h1>
@@ -476,7 +506,6 @@ export function ProjectsTab() {
         </div>
       </div>
 
-      {/* Filtres avancés */}
       <Card>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -532,7 +561,6 @@ export function ProjectsTab() {
         </CardContent>
       </Card>
 
-      {/* Actions groupées */}
       {selectedProjects.size > 0 && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4">
@@ -563,7 +591,6 @@ export function ProjectsTab() {
         </Card>
       )}
 
-      {/* Liste des projets */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -628,7 +655,6 @@ export function ProjectsTab() {
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-between items-center mt-6">
               <div className="text-sm text-muted-foreground">
@@ -660,11 +686,13 @@ export function ProjectsTab() {
         </CardContent>
       </Card>
 
-      {/* Dialog Envoi Email Groupé */}
       <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Envoi Email Groupé - {getSelectedProjectsWithEmail().length} destinataires</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              Envoi Email Groupé via Brevo - {getSelectedProjectsWithEmail().length} destinataires
+            </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-6">
@@ -722,32 +750,49 @@ export function ProjectsTab() {
               />
             </div>
 
-            <div className="bg-muted p-4 rounded-lg">
-              <h4 className="font-medium mb-2">Variables disponibles :</h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><code>{'{{nom_client}}'}</code> - Nom complet</div>
-                <div><code>{'{{prenom}}'}</code> - Prénom</div>
-                <div><code>{'{{nom}}'}</code> - Nom de famille</div>
-                <div><code>{'{{nom_commercial}}'}</code> - Commercial assigné</div>
-                <div><code>{'{{lien_rdv}}'}</code> - Lien RDV (si créé)</div>
-                <div><code>{'{{infos_premunia}}'}</code> - Infos de contact Premunia</div>
+            <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950 dark:to-green-950 p-4 rounded-lg border">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Variables de personnalisation :
+              </h4>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{nom_client}}'}</code> - Nom complet</div>
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{prenom}}'}</code> - Prénom</div>
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{nom}}'}</code> - Nom de famille</div>
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{nom_commercial}}'}</code> - Commercial assigné</div>
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{lien_rdv}}'}</code> - Lien RDV (si créé)</div>
+                <div><code className="bg-white dark:bg-gray-800 px-2 py-1 rounded">{'{{infos_premunia}}'}</code> - Infos contact</div>
               </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border-l-4 border-blue-500">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                📧 Envoi via API Brevo
+              </h4>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Les emails seront envoyés par batches de 10 pour optimiser les performances et éviter les limitations de l'API.
+                Chaque envoi sera loggé dans votre base de données pour un suivi complet.
+              </p>
             </div>
 
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsEmailDialogOpen(false)}>
                 Annuler
               </Button>
-              <Button onClick={handleSendGroupEmail} disabled={isSendingEmail}>
-                {isSendingEmail && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Envoyer via Brevo
+              <Button 
+                onClick={handleSendGroupEmail} 
+                disabled={isSendingEmail || !emailData.subject || !emailData.content}
+                className="flex items-center gap-2"
+              >
+                {isSendingEmail && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Send className="h-4 w-4" />
+                {isSendingEmail ? 'Envoi en cours...' : `Envoyer via Brevo (${getSelectedProjectsWithEmail().length})`}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Proposition RDV */}
       <Dialog open={isRdvDialogOpen} onOpenChange={setIsRdvDialogOpen}>
         <DialogContent>
           <DialogHeader>
