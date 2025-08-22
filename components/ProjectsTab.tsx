@@ -11,7 +11,7 @@ import { Label } from "./ui/label"
 import { Textarea } from "./ui/textarea"
 import { Checkbox } from "./ui/checkbox"
 import { useToast } from "../hooks/use-toast"
-import { supabase } from "../lib/supabase"
+import { supabase } from "../integrations/supabase/client"
 import { 
   Eye, Mail, Filter, Search, ChevronLeft, ChevronRight, 
   User, Building2, FileText, Calendar, Users, Target, 
@@ -244,7 +244,7 @@ export function ProjectsTab() {
           template_id: emailData.templateId ? parseInt(emailData.templateId) : null,
           statut_cible: statusFilter !== 'all' ? statusFilter : null,
           commercial: commercialFilter !== 'all' ? commercialFilter : null,
-          date_creation: new Date().toISOString()
+          created_at: new Date().toISOString()
         })
         .select()
         .single()
@@ -273,11 +273,11 @@ export function ProjectsTab() {
 
             console.log(`📧 Envoi vers: ${recipient.email}`)
 
-            const response = await fetch(`${supabase.supabaseUrl}/functions/v1/send-email`, {
+            const response = await fetch(`https://wybhtprxiwgzmpmnfceq.supabase.co/functions/v1/send-email`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabase.supabaseKey}`,
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5Ymh0cHJ4aXdnem1wbW5mY2VxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEwMzIwODksImV4cCI6MjA2NjYwODA4OX0.ctFmwHC_iitVB16WB7lY616lIp0CAHBUGRaoi56ruqc`,
               },
               body: JSON.stringify({
                 to: recipient.email,
