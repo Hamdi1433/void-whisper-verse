@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
@@ -16,7 +15,9 @@ import {
 } from 'lucide-react'
 import type { EmailTemplate, Segment } from '../lib/types'
 
+// Make TemplateVariables compatible with Supabase Json type
 interface TemplateVariables {
+  [key: string]: string | number | boolean | null
   nom_client: string
   prenom: string
   nom: string
@@ -96,11 +97,11 @@ export function EmailTemplatesTab({ templates, segments, onTemplateUpdate }: Ema
     try {
       const { error } = await supabase
         .from('email_templates')
-        .insert([{
+        .insert({
           ...formData,
-          variables: sampleVariables,
+          variables: sampleVariables as any,
           created_at: new Date().toISOString()
-        }])
+        })
 
       if (error) throw error
 
@@ -140,7 +141,7 @@ export function EmailTemplatesTab({ templates, segments, onTemplateUpdate }: Ema
         .from('email_templates')
         .update({
           ...formData,
-          variables: sampleVariables,
+          variables: sampleVariables as any,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedTemplate.id)

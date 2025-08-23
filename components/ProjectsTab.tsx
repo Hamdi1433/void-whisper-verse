@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -413,6 +412,9 @@ export function ProjectsTab() {
 
     try {
       const rdvPromises = selectedProjectsList.map(async (project) => {
+        // Generate a temporary lien that we'll update after creation
+        const tempLien = `https://moncrm.netlify.app/rdv/temp-${project.projet_id}`
+        
         const { data: rdv, error } = await supabase
           .from('rdv')
           .insert({
@@ -420,21 +422,23 @@ export function ProjectsTab() {
             commercial_id: project.commercial,
             date_proposee: rdvData.dateProposee,
             message: rdvData.message,
-            statut: 'propose'
+            statut: 'propose',
+            lien: tempLien
           })
           .select()
           .single()
 
         if (error) throw error
 
-        const lienRdv = `${window.location.origin}/rdv/${rdv.id}`
+        // Now update with the real lien using the generated ID
+        const realLien = `https://moncrm.netlify.app/rdv/${rdv.id}`
         
         await supabase
           .from('rdv')
-          .update({ lien: lienRdv })
+          .update({ lien: realLien })
           .eq('id', rdv.id)
 
-        return { ...rdv, lien: lienRdv }
+        return { ...rdv, lien: realLien }
       })
 
       const rdvResults = await Promise.all(rdvPromises)
