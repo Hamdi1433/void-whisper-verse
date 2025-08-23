@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -11,7 +12,7 @@ import { Label } from "./ui/label"
 import { Textarea } from "./ui/textarea"
 import { Checkbox } from "./ui/checkbox"
 import { useToast } from "../hooks/use-toast"
-import { supabase } from "../integrations/supabase/client"
+import { supabase } from "../src/integrations/supabase/client"
 import { 
   Eye, Mail, Filter, Search, ChevronLeft, ChevronRight, 
   User, Building2, FileText, Calendar, Users, Target, 

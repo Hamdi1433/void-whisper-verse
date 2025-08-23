@@ -4,8 +4,7 @@ import { useAuth } from '../../components/auth-provider'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../../components/Layout'
 import { CampaignsTab } from '../../components/CampaignsTab'
-import { supabase } from '../../integrations/supabase/client'
-import type { Campaign, Contact } from '../../lib/types'
+import { supabase } from '../integrations/supabase/client'
 
 export default function CampaignsPage() {
   const { user, loading } = useAuth()

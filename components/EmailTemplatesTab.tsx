@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 import { useToast } from '../hooks/use-toast'
-import { supabase } from '../integrations/supabase/client'
+import { supabase } from '../src/integrations/supabase/client'
 import { 
   Plus, Edit2, Trash2, Eye, Mail, Filter, Search, 
   ChevronLeft, ChevronRight, Target, Loader2
