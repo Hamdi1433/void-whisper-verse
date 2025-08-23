@@ -283,12 +283,7 @@ export function ProjectsTab() {
                 to: recipient.email,
                 subject: personalizedSubject,
                 html: personalizedHtml,
-                text: personalizedText,
-                config: {
-                  provider: 'brevo',
-                  sender_name: 'CRM Marketing',
-                  sender_email: 'info@premunia.com'
-                }
+                text: personalizedText
               })
             })
 
