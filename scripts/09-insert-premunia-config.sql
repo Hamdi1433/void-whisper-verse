@@ -1,5 +1,6 @@
+
 -- Insert Premunia Email Configuration
--- Configuration SMTP pour info@premunia.com
+-- Configuration SMTP pour info@premunia.com avec Brevo
 
 INSERT INTO public.email_configurations (
   id, email, description, smtp_host, smtp_port, smtp_secure, 
@@ -9,10 +10,10 @@ INSERT INTO public.email_configurations (
   2, 
   'info@premunia.com', 
   'Configuration Premunia - Serveur Brevo', 
-  'mail.premunia.com', 
+  'smtp-relay.brevo.com', 
   587, 
   true, 
-  'info@premunia.com', 
+  '694946002@smtp-brevo.com', 
   'h6P=4k)*U2IP$:=m', 
   null, 
   null, 
